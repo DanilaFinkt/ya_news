@@ -1,50 +1,53 @@
+from http import HTTPStatus
+
+from django.urls import reverse
+
 import pytest
 
-from django.test.client import Client
-
-from news.models import News, Comment
+from pytest_django.asserts import assertRedirects
 
 
-@pytest.fixture
-def author(django_user_model):
-    return django_user_model.objects.create(username='Автор')
+@pytest.mark.parametrize(
+    'name, args',
+    (
+        ('news:home', None),
+        ('news:detail', pytest.lazy_fixture('id_for_args')),
+        ('users:login', None),
+        ('users:logout', None),
+        ('users:signup', None),
+    ),
+)
+@pytest.mark.django_db
+def test_pages_availability(client, name, args):
+    url = reverse(name, args=args)
+    response = client.get(url)
+    assert response.status_code == HTTPStatus.OK
 
+@pytest.mark.parametrize(
+    'parametrized_client, expected_status',
+    (
+        (pytest.lazy_fixture('author_client'), HTTPStatus.OK),
+        (pytest.lazy_fixture('not_author_client'), HTTPStatus.NOT_FOUND),
+    ),
+)
+@pytest.mark.parametrize(
+    'name',
+    ('news:edit', 'news:delete'),
+)
+def test_availability_for_comment_edit_and_delete(
+    parametrized_client, name, comment, expected_status
+):
+    url = reverse(name, args=(comment.id,))
+    response = parametrized_client.get(url)
+    assert response.status_code == expected_status
 
-@pytest.fixture
-def not_author(django_user_model):
-    return django_user_model.objects.create(username='Не автор')
-
-
-@pytest.fixture
-def author_client(author):
-    client = Client()
-    client.force_login(author)
-    return client
-
-
-@pytest.fixture
-def not_author_client(not_author):
-    client = Client()
-    client.force_login(not_author)
-    return client
-
-
-@pytest.fixture
-def news():
-    news = News.objects.create(title='Заголовок', text='Текст')
-    return news
-
-
-@pytest.fixture
-def form_data():
-    return {'text': 'Текст комментария'}
-
-
-@pytest.fixture
-def comment(author, news):
-    comment = Comment.objects.create(
-            news=news,
-            author=author,
-            text='Текст комментария'
-        )
-    return comment
+@pytest.mark.parametrize(
+    'name',
+    ('news:edit', 'news:delete'),
+)
+def test_redirect_for_anonymous_client(client, name, comment):
+    login_url = reverse('users:login')
+    url = reverse(name, args=(comment.id,))
+    redirect_url = f'{login_url}?next={url}'
+    response = client.get(url)
+    assertRedirects(response, redirect_url)
