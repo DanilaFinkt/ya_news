@@ -55,7 +55,7 @@ def news_list():
 
 @pytest.fixture
 def form_data():
-    return {'text': 'Текст комментария'}
+    return {'text': 'Текст комментария изменен'}
 
 
 @pytest.fixture
